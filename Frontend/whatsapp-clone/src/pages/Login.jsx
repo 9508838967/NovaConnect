@@ -58,9 +58,13 @@ export default function Login({ onLoginSuccess, setView }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', backgroundColor: '#111b21', height: '100vh', width: '100vw', boxSizing: 'border-box' }}>
-      <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#1fa855', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>W</div>
+      <img 
+  src="/logo.png" 
+  alt="NovaConnect Logo" 
+  style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', marginBottom: '16px' }} 
+/>
       
-      <h2 style={{ color: '#e9edef', margin: '0 0 24px 0', fontSize: '20px', fontFamily: 'sans-serif' }}>Sign in to WhatsApp</h2>
+      <h2 style={{ color: '#e9edef', margin: '0 0 24px 0', fontSize: '20px', fontFamily: 'sans-serif' }}>Sign in to NovaConnect</h2>
       
       <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <input 
