@@ -20,7 +20,7 @@ export default function Login({ onLoginSuccess, setView }) {
       const payload = { email, password };
       console.log("Sending Login Data:", payload);
       
-      // Endpoint target route: http://localhost:5000/api/v1/auth/login
+      // Endpoint target route: https://novaconnect-uowz.onrender.com](https://novaconnect-uowz.onrender.com/api/v1/auth/login
       const res = await API.post('/auth/login', payload);
       console.log("Response from server:", res.data);
 
