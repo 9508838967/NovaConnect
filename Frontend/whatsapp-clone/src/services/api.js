@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'https://novaconnect-uowz.onrender.com/api/v1',
+  baseURL:import.meta.env.VITE_API_URL ||'https://novaconnect-uowz.onrender.com/api/v1',
   withCredentials: true // Cookies ke liye yeh rehne dete hain
 });
 
