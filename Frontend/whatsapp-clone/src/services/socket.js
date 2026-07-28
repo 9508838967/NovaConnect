@@ -4,7 +4,7 @@
  */
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://novaconnect-uowz.onrender.com](https://novaconnect-uowz.onrender.com';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://novaconnect-uowz.onrender.com';
 
 export const socket = io(SOCKET_URL, {
   autoConnect: false,
