@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import API from '../services/api';
-import novaLogo from '../assets/logo.png.jpg';
+import novaLogo from '../assets/logo.png';
 
 export default function Login({ onLoginSuccess, setView }) {
   const [email, setEmail] = useState('');
