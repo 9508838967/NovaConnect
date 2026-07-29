@@ -2,6 +2,7 @@
  * Full-screen active video call UI.
  * Dependencies: react, lucide-react, CallContext, videoCall components
  */
+import React, { useEffect } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { CALL_STATUS } from "../constants/callEvents.js";
 import { useCall } from '../context/CallContext.jsx';
@@ -21,7 +22,7 @@ const STATUS_LABELS = {
   [CALL_STATUS.FAILED]: 'Call failed',
 };
 
-export default function VideoCallPage({ onClose }) {
+export default function VideoCallPage({ onClose, isIncoming }) {
   const {
     callStatus,
     localStream,
@@ -40,10 +41,18 @@ export default function VideoCallPage({ onClose }) {
     toggleVideo,
   } = useCall();
 
+  // 🔴 STEP 2 FIX: Trigger WebRTC Accept & SDP Answer automatically for incoming calls
+  useEffect(() => {
+    if (isIncoming && incomingCall && callStatus === CALL_STATUS.INCOMING) {
+      console.log("🚀 Triggering WebRTC SDP Accept from VideoCallPage...");
+      acceptCall();
+    }
+  }, [isIncoming, incomingCall, callStatus, acceptCall]);
+
   const peerName = activePeer?.username || incomingCall?.caller?.username || 'Contact';
   const statusLabel = STATUS_LABELS[callStatus] || callStatus;
 
-  if (callStatus === CALL_STATUS.INCOMING && incomingCall) {
+  if (callStatus === CALL_STATUS.INCOMING && incomingCall && !isIncoming) {
     return (
       <IncomingCallModal
         caller={incomingCall.caller}
