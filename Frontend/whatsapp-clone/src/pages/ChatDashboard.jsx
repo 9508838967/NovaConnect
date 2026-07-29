@@ -3,7 +3,7 @@ import { Search, MessageSquarePlus, Camera, MoreVertical, ArrowLeft, Smile, Pape
 import { useSocket } from '../context/SocketContext.jsx';
 import API from '../services/api';
 import ChatList from '../components/ChatList';
-import IncomingCallModal from '../components/IncomingCallModal'; // 🔴 IMPORTED MODAL
+import IncomingCallModal from "../components/videoCall/IncomingCallModal"; // 🔴 IMPORTED MODAL
 
 export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   const { getSocket } = useSocket();
