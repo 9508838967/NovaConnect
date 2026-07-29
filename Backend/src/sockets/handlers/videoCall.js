@@ -23,7 +23,7 @@ const {
  * @param {object} payload
  */
 function emitToUser(io, userId, event, payload) {
-  io.to(`user:${userId}`).emit(event, payload);
+  io.to(`user:${String(userId)}`).emit(event, payload);
 }
 
 /**
@@ -48,6 +48,9 @@ function broadcastCallEnded(io, session, reason, endedBy) {
 module.exports = (io, socket, user) => {
   const userId = user._id.toString();
 
+  // 🔴 FIX 1: Join User Personal Room so io.to(`user:${userId}`) works!
+  socket.join(`user:${userId}`);
+
   // ─── Initiate call (caller → server → callee) ───────────────────────────
   socket.on(CALL_EVENTS.INITIATE, async (data, callback) => {
     try {
@@ -57,14 +60,22 @@ module.exports = (io, socket, user) => {
         return callback?.({ error: 'calleeId is required' });
       }
 
-      const calleeOnline = await SocketStore.isUserOnline(calleeId);
-      if (!calleeOnline) {
+      const targetCalleeId = String(calleeId);
+
+      // 🔴 FIX 2: String formatted calleeId pass karein
+      const calleeOnline = await SocketStore.isUserOnline(targetCalleeId);
+      
+      // Fallback check: Agar SocketStore check fail ho, par room me sockets hon
+      const roomSockets = io.sockets.adapter.rooms.get(`user:${targetCalleeId}`);
+      const isRoomActive = roomSockets && roomSockets.size > 0;
+
+      if (!calleeOnline && !isRoomActive) {
         return callback?.({ error: 'User is offline' });
       }
 
       const { session, error } = callSessionStore.createSession({
         callerId: userId,
-        calleeId: String(calleeId),
+        calleeId: targetCalleeId,
         callType,
       });
 
