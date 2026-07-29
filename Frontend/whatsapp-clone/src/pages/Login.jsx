@@ -62,7 +62,7 @@ export default function Login({ onLoginSuccess, setView }) {
       <img 
   src={novaLogo} 
   alt="NovaConnect Logo" 
-  style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', marginBottom: '16px' }} 
+  style={{ width: '80px', height: 'auto', borderRadius: '50%', objectFit: 'contain', marginBottom: '16px',display:'block' }} 
 />
       
       <h2 style={{ color: '#e9edef', margin: '0 0 24px 0', fontSize: '20px', fontFamily: 'sans-serif' }}>Sign in to NovaConnect</h2>
