@@ -60,7 +60,7 @@ export default function Login({ onLoginSuccess, setView }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', backgroundColor: '#111b21', height: '100vh', width: '100vw', boxSizing: 'border-box' }}>
       <img 
-  src="/logo.png" 
+  src={novaLogo} 
   alt="NovaConnect Logo" 
   style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', marginBottom: '16px' }} 
 />
