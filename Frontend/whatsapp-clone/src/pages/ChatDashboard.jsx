@@ -150,7 +150,21 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     if (!incomingCall) return;
     const socket = getSocket();
 
-    // Trigger video call screen on receiver side
+    // 1. Backend ko turant batao ki call accept ho gayi hai taaki Ring Timer stop ho jaye
+    if (socket?.connected) {
+      socket.emit('call:accept', {
+        callId: incomingCall.callId,
+        answer: null // WebRTC answer peer connection screen par generate hokar negotiate hoga
+      }, (response) => {
+        if (response?.error) {
+          console.error("Call Accept Error:", response.error);
+        } else {
+          console.log("Call Accepted Successfully");
+        }
+      });
+    }
+
+    // 2. Trigger video call screen on receiver side
     if (onTriggerCall) {
       onTriggerCall({
         id: incomingCall.caller.id,

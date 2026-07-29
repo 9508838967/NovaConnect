@@ -135,16 +135,19 @@ module.exports = (io, socket, user) => {
       if (!session) {
         return callback?.({ error: 'Call session not found' });
       }
-      if (session.calleeId !== userId) {
+
+      // Check if logged-in user is callee
+      if (String(session.calleeId) !== String(userId)) {
         return callback?.({ error: 'Only the callee can accept' });
       }
-      if (session.status !== CALL_STATUS.RINGING) {
-        return callback?.({ error: 'Call is no longer ringing' });
-      }
 
+      // Clear ring timer so call doesn't auto-miss
       callSessionStore.clearRingTimer(callId);
+
+      // Status update & Notify Caller
       callSessionStore.updateStatus(callId, CALL_STATUS.CONNECTING);
 
+      // Caller ko ACCEPTED notification bhejein
       emitToUser(io, session.callerId, CALL_EVENTS.ACCEPTED, {
         callId,
         answer: answer || null,
