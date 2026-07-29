@@ -1,6 +1,7 @@
 // src/pages/Signup.jsx
 import React, { useState } from 'react';
 import API from '../services/api';
+import novaLogo from '../assets/logo.png';
 
 export default function Signup({ setView }) {
   const [email, setEmail] = useState('');
@@ -57,9 +58,12 @@ export default function Signup({ setView }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', backgroundColor: '#111b21', height: '100vh', width: '100vw', boxSizing: 'border-box' }}>
-      <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#1fa855', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>W</div>
-      
-      <h2 style={{ color: '#e9edef', margin: '0 0 24px 0', fontSize: '20px', fontFamily: 'sans-serif' }}>Create WhatsApp Account</h2>
+      <img 
+        src={novaLogo} 
+        alt="NovaConnect Logo" 
+        style={{ width: '80px', height: 'auto', borderRadius: '50%', objectFit: 'contain', marginBottom: '16px',display:'block' }} 
+      />
+      <h2 style={{ color: '#e9edef', margin: '0 0 24px 0', fontSize: '20px', fontFamily: 'sans-serif' }}>Create NovaConnect Account</h2>
       
       <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <input 
