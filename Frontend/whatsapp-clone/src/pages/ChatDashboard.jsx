@@ -3,6 +3,7 @@ import { Search, MessageSquarePlus, Camera, MoreVertical, ArrowLeft, Smile, Pape
 import { useSocket } from '../context/SocketContext.jsx';
 import API from '../services/api';
 import ChatList from '../components/ChatList';
+import IncomingCallModal from '../components/IncomingCallModal'; // 🔴 IMPORTED MODAL
 
 export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   const { getSocket } = useSocket();
@@ -11,6 +12,9 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   const [messageInput, setMessageInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showMenuDropDown, setShowMenuDropDown] = useState(false);
+
+  // 🔴 1. INCOMING CALL STATE (For Video/Audio Call Popup)
+  const [incomingCall, setIncomingCall] = useState(null);
 
   // 1. INITIAL SYNC: Load chat list
   useEffect(() => {
@@ -33,12 +37,23 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     loadConversations();
   }, [getSocket]);
 
-  // 2. LIVE REAL-TIME CHANNELS STREAMING MANAGEMENT
+  // 2. LIVE REAL-TIME CHANNELS STREAMING MANAGEMENT & CALL LISTENERS
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
     const myUserId = localStorage.getItem('userId');
+
+    // 🔴 INCOMING CALL HANDLERS
+    const handleIncomingCall = (data) => {
+      console.log("☎️ Incoming call payload received:", data);
+      // data = { callId, caller: { id, username }, callType, offer }
+      setIncomingCall(data);
+    };
+
+    const handleCallEndedOrMissed = () => {
+      setIncomingCall(null);
+    };
 
     const handlePrivateMessage = (incomingMsg) => {
       if (!incomingMsg) return;
@@ -90,7 +105,7 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
       }
     };
 
-    // 🚨 DELETE FOR EVERYONE REAL-TIME LISTENER
+    // DELETE FOR EVERYONE REAL-TIME LISTENER
     const handleMessageDeletedEveryone = ({ messageId, chatId }) => {
       const markAsDeleted = (msgs = []) =>
         msgs.map(m =>
@@ -103,11 +118,18 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
       setActiveChats(prev => prev.map(c => (c.id === chatId ? { ...c, messages: markAsDeleted(c.messages) } : c)));
     };
 
+    // Socket Events Bind
     socket.on('private:message', handlePrivateMessage);
     socket.on('group:message', handleGroupMessage);
     socket.on('presence:update', handlePresenceUpdate);
     socket.on('typing:state_change', handleTypingChange);
     socket.on('message:deleted_everyone', handleMessageDeletedEveryone);
+
+    // 🔴 CALL SOCKET LISTENERS
+    socket.on('call:incoming', handleIncomingCall);
+    socket.on('call:ended', handleCallEndedOrMissed);
+    socket.on('call:missed', handleCallEndedOrMissed);
+    socket.on('call:rejected', handleCallEndedOrMissed);
 
     return () => {
       socket.off('private:message', handlePrivateMessage);
@@ -115,8 +137,45 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
       socket.off('presence:update', handlePresenceUpdate);
       socket.off('typing:state_change', handleTypingChange);
       socket.off('message:deleted_everyone', handleMessageDeletedEveryone);
+
+      socket.off('call:incoming', handleIncomingCall);
+      socket.off('call:ended', handleCallEndedOrMissed);
+      socket.off('call:missed', handleCallEndedOrMissed);
+      socket.off('call:rejected', handleCallEndedOrMissed);
     };
   }, [getSocket, selectedChat]);
+
+  // 🔴 3. CALL ACCEPT / REJECT HANDLERS FOR RECEIVER
+  const handleAcceptCall = () => {
+    if (!incomingCall) return;
+    const socket = getSocket();
+
+    // Trigger video call screen on receiver side
+    if (onTriggerCall) {
+      onTriggerCall({
+        id: incomingCall.caller.id,
+        name: incomingCall.caller.username,
+        callData: incomingCall,
+        isIncoming: true
+      });
+    }
+
+    setIncomingCall(null);
+  };
+
+  const handleRejectCall = () => {
+    if (!incomingCall) return;
+    const socket = getSocket();
+
+    if (socket?.connected) {
+      socket.emit('call:reject', {
+        callId: incomingCall.callId,
+        reason: 'rejected'
+      });
+    }
+
+    setIncomingCall(null);
+  };
 
   const updateChatMessagesPipeline = (chatId, msgObject) => {
     if (!chatId) return;
@@ -198,7 +257,6 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
       } else {
         socket.emit('private:message', { chatId: selectedChat.id, text: textToSend, time: currentTime }, (res) => {
           if (res?.success && res?.message?._id) {
-            // Server DB ID ko temp ID se replace karein
             setSelectedChat(prev => ({
               ...prev,
               messages: (prev.messages || []).map(m => m.id === tempUniqueId ? { ...m, id: res.message._id, _id: res.message._id } : m)
@@ -216,7 +274,7 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     }
   };
 
-  // 🚨 DELETE FOR EVERYONE HANDLER FUNCTION
+  // DELETE FOR EVERYONE HANDLER FUNCTION
   const handleDeleteForEveryone = (messageId) => {
     if (!selectedChat || !messageId) return;
 
@@ -280,6 +338,16 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
       
+      {/* 🔴 INCOMING CALL OVERLAY MODAL */}
+      {incomingCall && (
+        <IncomingCallModal
+          caller={incomingCall.caller}
+          callType={incomingCall.callType}
+          onAccept={handleAcceptCall}
+          onReject={handleRejectCall}
+        />
+      )}
+
       {/* ACTIVE CHAT WORKSPACE OVERLAY SCREEN */}
       {selectedChat && (
         <div style={{ position: 'absolute', inset: 0, backgroundColor: '#0b141a', zIndex: 50, display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -338,7 +406,7 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
                     <div style={{ position: 'absolute', bottom: '2px', right: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '10px', color: '#8696a0', fontWeight: '500' }}>{m.time}</span>
                       
-                      {/* Sirf Sender ke liye Delete for Everyone icon */}
+                      {/* Delete for Everyone */}
                       {m.isMe && !isDeleted && (
                         <Trash2
                           size={12}
