@@ -98,6 +98,7 @@ export function useWebRTC(getSocket) {
     const pc = createPeerConnection();
 
     pc.ontrack = (event) => {
+      console.log("🎥 Remote Stream Track Received:", event.streams);
       const [stream] = event.streams;
       if (stream) {
         remoteStreamRef.current = stream;
@@ -115,12 +116,16 @@ export function useWebRTC(getSocket) {
     };
 
     pc.onconnectionstatechange = () => {
+      console.log("⚡ Connection State Changed:", pc.connectionState);
       setConnectionState(pc.connectionState);
+
       if (pc.connectionState === 'connected') {
         setCallStatus(CALL_STATUS.CONNECTED);
+        setCallError(null); // Clear "User is busy" / "Failed" error banner
       }
       if (pc.connectionState === 'failed') {
-        setCallError('Connection failed. Try again.');
+        console.error("❌ WebRTC Connection Failed");
+        setCallError('Connection failed. Retrying...');
         setCallStatus(CALL_STATUS.FAILED);
       }
       if (pc.connectionState === 'disconnected') {
@@ -129,6 +134,7 @@ export function useWebRTC(getSocket) {
     };
 
     pc.oniceconnectionstatechange = () => {
+      console.log("🧊 ICE Connection State:", pc.iceConnectionState);
       if (pc.iceConnectionState === 'failed') {
         setCallError('Network error during call.');
       }
@@ -171,13 +177,28 @@ export function useWebRTC(getSocket) {
     }
   }, []);
 
+  // Safe media initializer with fallback for mobile browsers
   const acquireLocalMedia = useCallback(async (callType = 'video') => {
-    const constraints =
-      callType === 'audio' ? AUDIO_ONLY_CONSTRAINTS : DEFAULT_MEDIA_CONSTRAINTS;
-    const stream = await getUserMediaSafe(constraints);
-    localStreamRef.current = stream;
-    setLocalStream(stream);
-    return stream;
+    try {
+      const constraints =
+        callType === 'audio' ? AUDIO_ONLY_CONSTRAINTS : DEFAULT_MEDIA_CONSTRAINTS;
+      const stream = await getUserMediaSafe(constraints);
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+      setIsVideoOff(false);
+      return stream;
+    } catch (err) {
+      console.warn("⚠️ Preferred media constraints failed, trying basic fallback...", err);
+      try {
+        const fallbackStream = await getUserMediaSafe({ audio: true, video: callType !== 'audio' });
+        localStreamRef.current = fallbackStream;
+        setLocalStream(fallbackStream);
+        return fallbackStream;
+      } catch (fallbackErr) {
+        console.error("❌ Audio/Video permission denied completely:", fallbackErr);
+        throw new Error("Camera or Microphone permission denied");
+      }
+    }
   }, []);
 
   // ─── Initiate outgoing call ───────────────────────────────────────────────
@@ -210,20 +231,24 @@ export function useWebRTC(getSocket) {
           offer: serializeDescription(offer),
         });
 
+        if (response?.error) {
+          throw new Error(response.error);
+        }
+
         callIdRef.current = response.callId;
         setCallStatus(CALL_STATUS.RINGING);
         return response.callId;
       } catch (err) {
         fullCleanup();
         setCallStatus(CALL_STATUS.FAILED);
-        setCallError(err.message);
+        setCallError(err.message || 'Call failed');
         throw err;
       }
     },
     [getSocket, acquireLocalMedia, setupPeerConnection, fullCleanup]
   );
 
-  // ─── Accept incoming call ─────────────────────────────────────────────────
+  // ─── Accept incoming call (Fixed SDP Answer Negotiation) ───────────────
   const acceptCall = useCallback(async () => {
     const socket = getSocket();
     const incoming = incomingCall;
@@ -256,9 +281,10 @@ export function useWebRTC(getSocket) {
       setIncomingCall(null);
       setCallStatus(CALL_STATUS.CONNECTED);
     } catch (err) {
+      console.error("[acceptCall] Error:", err);
       fullCleanup();
       setCallStatus(CALL_STATUS.FAILED);
-      setCallError(err.message);
+      setCallError(err.message || 'Failed to accept call');
       throw err;
     }
   }, [
@@ -334,10 +360,12 @@ export function useWebRTC(getSocket) {
     if (!socket) return;
 
     const handleIncoming = (payload) => {
+      console.log("☎️ Incoming call payload:", payload);
       if (callIdRef.current) {
         socket.emit(CALL_EVENTS.REJECT, { callId: payload.callId, reason: 'busy' });
         return;
       }
+      setCallError(null);
       setIncomingCall(payload);
       setCallStatus(CALL_STATUS.INCOMING);
     };
@@ -348,16 +376,19 @@ export function useWebRTC(getSocket) {
     };
 
     const handleAccepted = async ({ callId, answer }) => {
+      console.log("✅ Call accepted on Caller side, SDP Answer:", answer);
       callIdRef.current = callId;
       const pc = pcRef.current;
+
       if (pc && answer) {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
           await flushPendingCandidates();
           setCallStatus(CALL_STATUS.CONNECTED);
+          setCallError(null);
         } catch (err) {
           console.error('[useWebRTC] handleAccepted error:', err);
-          setCallError('Failed to establish connection');
+          setCallError('Failed to establish WebRTC connection');
         }
       }
     };
