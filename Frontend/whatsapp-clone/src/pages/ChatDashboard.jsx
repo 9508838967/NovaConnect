@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MessageSquarePlus, Camera, MoreVertical, ArrowLeft, Smile, Paperclip, Send, Mic, Trash2 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext.jsx';
+import { useCall } from '../context/CallContext.jsx'; // 🔴 1. IMPORTED USECALL HOOK
 import API from '../services/api';
 import ChatList from '../components/ChatList';
-import IncomingCallModal from "../components/videoCall/IncomingCallModal"; // 🔴 IMPORTED MODAL
+import IncomingCallModal from "../components/videoCall/IncomingCallModal";
 
 export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   const { getSocket } = useSocket();
+  const { acceptCall, rejectCall } = useCall(); // 🔴 2. DESTROYS & EXPOSES WEBRTC HANDSHAKE METHODS
+
   const [activeChats, setActiveChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [messageInput, setMessageInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showMenuDropDown, setShowMenuDropDown] = useState(false);
 
-  // 🔴 1. INCOMING CALL STATE (For Video/Audio Call Popup)
+  // 1. INCOMING CALL STATE
   const [incomingCall, setIncomingCall] = useState(null);
 
-  // 1. INITIAL SYNC: Load chat list
+  // INITIAL SYNC: Load chat list
   useEffect(() => {
     const loadConversations = async () => {
       try {
@@ -37,17 +40,16 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     loadConversations();
   }, [getSocket]);
 
-  // 2. LIVE REAL-TIME CHANNELS STREAMING MANAGEMENT & CALL LISTENERS
+  // LIVE REAL-TIME CHANNELS STREAMING MANAGEMENT & CALL LISTENERS
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
     const myUserId = localStorage.getItem('userId');
 
-    // 🔴 INCOMING CALL HANDLERS
+    // INCOMING CALL HANDLERS
     const handleIncomingCall = (data) => {
       console.log("☎️ Incoming call payload received:", data);
-      // data = { callId, caller: { id, username }, callType, offer }
       setIncomingCall(data);
     };
 
@@ -105,7 +107,6 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
       }
     };
 
-    // DELETE FOR EVERYONE REAL-TIME LISTENER
     const handleMessageDeletedEveryone = ({ messageId, chatId }) => {
       const markAsDeleted = (msgs = []) =>
         msgs.map(m =>
@@ -125,7 +126,7 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     socket.on('typing:state_change', handleTypingChange);
     socket.on('message:deleted_everyone', handleMessageDeletedEveryone);
 
-    // 🔴 CALL SOCKET LISTENERS
+    // CALL SOCKET LISTENERS
     socket.on('call:incoming', handleIncomingCall);
     socket.on('call:ended', handleCallEndedOrMissed);
     socket.on('call:missed', handleCallEndedOrMissed);
@@ -145,32 +146,34 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     };
   }, [getSocket, selectedChat]);
 
-  // 🔴 FIXED RECEIVER ACCEPT HANDLER
-  const handleAcceptCall = () => {
+  // 🔴 3. UPDATED RECEIVER ACCEPT HANDLER (WebRTC Native SDP Handshake)
+  const handleAcceptCall = async () => {
     if (!incomingCall) return;
 
-    // Direct VideoCallPage open karein (useWebRTC ka acceptCall trigger hoga)
-    if (onTriggerCall) {
-      onTriggerCall({
-        id: incomingCall.caller.id,
-        name: incomingCall.caller.username,
-        callData: incomingCall,
-        isIncoming: true
-      });
+    try {
+      // CallContext se acceptCall trigger hoga jo camera/mic access leke SDP Answer emit karega
+      await acceptCall(incomingCall);
+    } catch (err) {
+      console.error("WebRTC SDP Answer generate karne me error aayi:", err);
+    } finally {
+      setIncomingCall(null);
     }
-
-    setIncomingCall(null);
   };
 
+  // 🔴 4. UPDATED RECEIVER REJECT HANDLER
   const handleRejectCall = () => {
     if (!incomingCall) return;
-    const socket = getSocket();
 
-    if (socket?.connected) {
-      socket.emit('call:reject', {
-        callId: incomingCall.callId,
-        reason: 'rejected'
-      });
+    if (rejectCall) {
+      rejectCall(incomingCall.callId);
+    } else {
+      const socket = getSocket();
+      if (socket?.connected) {
+        socket.emit('call:reject', {
+          callId: incomingCall.callId,
+          reason: 'rejected'
+        });
+      }
     }
 
     setIncomingCall(null);
@@ -233,7 +236,6 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     }
   };
 
-  // MESSAGE DISPATCH SYSTEM
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!messageInput.trim() || !selectedChat) return;
@@ -273,7 +275,6 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     }
   };
 
-  // DELETE FOR EVERYONE HANDLER FUNCTION
   const handleDeleteForEveryone = (messageId) => {
     if (!selectedChat || !messageId) return;
 
@@ -337,7 +338,7 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
       
-      {/* 🔴 INCOMING CALL OVERLAY MODAL */}
+      {/* INCOMING CALL OVERLAY MODAL */}
       {incomingCall && (
         <IncomingCallModal
           caller={incomingCall.caller}
@@ -405,7 +406,6 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
                     <div style={{ position: 'absolute', bottom: '2px', right: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '10px', color: '#8696a0', fontWeight: '500' }}>{m.time}</span>
                       
-                      {/* Delete for Everyone */}
                       {m.isMe && !isDeleted && (
                         <Trash2
                           size={12}
