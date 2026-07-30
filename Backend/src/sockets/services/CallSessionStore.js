@@ -45,11 +45,17 @@ class CallSessionStore {
    * @param {string} userId
    */
   isUserBusy(userId) {
-    const callId = this.userActiveCall.get(String(userId));
-    if (!callId) return false;
-    const session = this.sessions.get(callId);
-    return session && session.status !== CALL_STATUS.ENDED;
+  const id = String(userId);
+  const callId = this.userActiveCall.get(id);
+  if (!callId) return false;
+
+  const session = this.sessions.get(callId);
+  if (!session || session.status === CALL_STATUS.ENDED || session.status === CALL_STATUS.REJECTED || session.status === CALL_STATUS.FAILED) {
+    this.userActiveCall.delete(id); // Stale reference clear karein
+    return false;
   }
+  return true;
+}
 
   /**
    * @param {string} userId
@@ -111,18 +117,22 @@ class CallSessionStore {
    * @param {string} status
    */
   updateStatus(callId, status) {
-    const session = this.sessions.get(callId);
-    if (!session) return null;
+  const session = this.sessions.get(callId);
+  if (!session) return null;
 
-    session.status = status;
-    if (status === CALL_STATUS.CONNECTED) {
-      session.connectedAt = Date.now();
-    }
-    if (status === CALL_STATUS.ENDED) {
-      session.endedAt = Date.now();
-    }
-    return session;
+  session.status = status;
+  if (status === CALL_STATUS.CONNECTED) {
+    session.connectedAt = Date.now();
   }
+  if (status === CALL_STATUS.ENDED || status === CALL_STATUS.FAILED || status === CALL_STATUS.REJECTED) {
+    session.endedAt = Date.now();
+    // User ko active map se clear karna zaroori hai
+    this.userActiveCall.delete(session.callerId);
+    this.userActiveCall.delete(session.calleeId);
+    this.clearRingTimer(callId);
+  }
+  return session;
+}
 
   /**
    * @param {string} callId
