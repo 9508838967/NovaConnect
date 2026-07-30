@@ -1,7 +1,5 @@
 /**
- * WebRTC ICE / STUN configuration.
- * For production behind strict NAT, add TURN servers via env:
- *   VITE_TURN_URL, VITE_TURN_USERNAME, VITE_TURN_CREDENTIAL
+ * WebRTC ICE / STUN / TURN configuration.
  */
 
 const turnUrl = import.meta.env.VITE_TURN_URL;
@@ -12,6 +10,18 @@ const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
 export const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  // Hardcoded free public TURN fallback (Jab tak ENV variable Render par set na ho)
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  }
 ];
 
 if (turnUrl && turnUsername && turnCredential) {
@@ -27,11 +37,11 @@ export const PEER_CONNECTION_CONFIG = {
   iceCandidatePoolSize: 10,
 };
 
-/** Default getUserMedia constraints — extensible for screen share later */
+/** Default getUserMedia constraints — Flexible for mobile & low-end webcams */
 export const DEFAULT_MEDIA_CONSTRAINTS = {
   video: {
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
+    width: { min: 320, ideal: 640, max: 1280 },
+    height: { min: 240, ideal: 480, max: 720 },
     facingMode: 'user',
   },
   audio: {
