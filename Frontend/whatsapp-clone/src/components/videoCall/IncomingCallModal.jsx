@@ -82,7 +82,17 @@ export default function IncomingCallModal({ caller, callType, onAccept, onReject
         <button
           type="button"
           aria-label="Accept call"
-          onClick={onAccept}
+          onClick={(e) => {
+            if (e && typeof e.preventDefault === 'function') {
+              e.preventDefault();
+            }
+            if (e && typeof e.stopPropagation === 'function') {
+              e.stopPropagation();
+            }
+            if (onAccept) {
+              onAccept(e);
+            }
+          }}
           style={{
             width: '64px',
             height: '64px',

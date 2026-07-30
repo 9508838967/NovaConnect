@@ -147,18 +147,22 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   }, [getSocket, selectedChat]);
 
   // 🔴 FIXED RECEIVER ACCEPT HANDLER
-  const handleAcceptCall = async () => {
+  const handleAcceptCall = async (e) => {
+    // 1. Prevent form submit or page reload if button is inside a form/link
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+
     if (!incomingCall) return;
 
     try {
-      // CallContext se acceptCall trigger hoga jo camera/mic stream setup karke SDP Answer bhejega
+      // 2. CallContext se acceptCall trigger hoga
       await acceptCall(incomingCall);
       
-      // Connection start hone ke BAAD modal hide karein
+      // 3. Connection start hone ke BAAD modal hide karein
       setIncomingCall(null);
     } catch (err) {
       console.error("WebRTC SDP Answer generate karne me error aayi:", err);
-      // Agar error aati hai tabhi incoming state clear karein
       setIncomingCall(null);
     }
   };
