@@ -15,13 +15,20 @@ export function SocketProvider({ children, isAuthenticated }) {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
 
-  useEffect(() => {
+ useEffect(() => {
+    // Agar authenticated nahi hai, tabhi disconnect karein
     if (!isAuthenticated) {
       if (socketRef.current) {
+        console.log("🔒 Logging out: Disconnecting socket");
         socketRef.current.disconnect();
         socketRef.current = null;
         setIsConnected(false);
       }
+      return;
+    }
+
+    // Agar socket pehle se connected hai, toh naya socket mat banao!
+    if (socketRef.current?.connected) {
       return;
     }
 
@@ -66,13 +73,13 @@ export function SocketProvider({ children, isAuthenticated }) {
 
     socket.connect();
 
+    // 🔴 FIX: Cleanup me socket.disconnect() NAI KARNA HAI!
+    // Ye har re-render par socket disconnect kar de raha tha.
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);
-      socket.disconnect();
-      socketRef.current = null;
-      setIsConnected(false);
+      // socket.disconnect() REMOVED!
     };
   }, [isAuthenticated]);
 
