@@ -248,11 +248,18 @@ export function useWebRTC(getSocket) {
     [getSocket, acquireLocalMedia, setupPeerConnection, fullCleanup]
   );
 
-  // ─── Accept incoming call (Fixed SDP Answer Negotiation) ───────────────
-  const acceptCall = useCallback(async () => {
+ // ─── Accept incoming call (Fixed SDP Answer Negotiation & Payload Parameter) ───────────────
+  const acceptCall = useCallback(async (payloadParam) => {
     const socket = getSocket();
-    const incoming = incomingCall;
-    if (!incoming || !socket?.connected) return;
+    // Prefer passed payloadParam, fallback to state variable
+    const incoming = payloadParam || incomingCall;
+
+    console.log("🚀 ACCEPT CALL TRIGGERED WITH PAYLOAD:", incoming);
+
+    if (!incoming || !socket?.connected) {
+      console.error("❌ Cannot accept call: incoming payload or socket missing", { incoming, connected: socket?.connected });
+      return;
+    }
 
     try {
       setCallError(null);
@@ -273,10 +280,13 @@ export function useWebRTC(getSocket) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      await emitWithAck(socket, CALL_EVENTS.ACCEPT, {
+      // Emit Accept Event to Backend
+      const response = await emitWithAck(socket, CALL_EVENTS.ACCEPT, {
         callId: incoming.callId,
         answer: serializeDescription(answer),
       });
+
+      console.log("✅ ACCEPT RESPONSE FROM SERVER:", response);
 
       setIncomingCall(null);
       setCallStatus(CALL_STATUS.CONNECTED);
