@@ -79,7 +79,7 @@ class CallSessionStore {
    * @param {{ callerId: string, calleeId: string, callType?: string }} params
    * @returns {{ session: CallSession, error?: string }}
    */
-  createSession({ callerId, calleeId, callType = 'video' }) {
+  createSession({ callerId, calleeId, callType = 'video',callerSocketId  }) {
     const caller = String(callerId);
     const callee = String(calleeId);
 
