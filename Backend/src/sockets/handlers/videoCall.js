@@ -75,6 +75,7 @@ module.exports = (io, socket, user) => {
 
       const { session, error } = callSessionStore.createSession({
         callerId: userId,
+        callerSocketId: socket.id,
         calleeId: targetCalleeId,
         callType,
       });
@@ -144,15 +145,27 @@ module.exports = (io, socket, user) => {
       // Clear ring timer so call doesn't auto-miss
       callSessionStore.clearRingTimer(callId);
 
-      // Status update & Notify Caller
+      // Status update
       callSessionStore.updateStatus(callId, CALL_STATUS.CONNECTING);
 
-      // Caller ko ACCEPTED notification bhejein
-      emitToUser(io, session.callerId, CALL_EVENTS.ACCEPTED, {
+      const acceptPayload = {
         callId,
         answer: answer || null,
         callee: { id: userId, username: user.username },
-      });
+      };
+
+      // 🔴 FIX: Direct Socket ID aur User Room DONO par emit karein taaki kisi bhi condition me drop na ho
+      if (session.callerSocketId) {
+        io.to(session.callerSocketId).emit(CALL_EVENTS.ACCEPTED, acceptPayload);
+      }
+
+      // Fallback 1: User ID Specific Room
+      io.to(String(session.callerId)).emit(CALL_EVENTS.ACCEPTED, acceptPayload);
+
+      // Fallback 2: Helper method (if exists)
+      if (typeof emitToUser === 'function') {
+        emitToUser(io, session.callerId, CALL_EVENTS.ACCEPTED, acceptPayload);
+      }
 
       callSessionStore.updateStatus(callId, CALL_STATUS.CONNECTED);
       callback?.({ success: true, callId });
