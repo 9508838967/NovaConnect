@@ -154,18 +154,16 @@ module.exports = (io, socket, user) => {
         callee: { id: userId, username: user.username },
       };
 
-      // 🔴 FIX: Direct Socket ID aur User Room DONO par emit karein taaki kisi bhi condition me drop na ho
-      if (session.callerSocketId) {
-        io.to(session.callerSocketId).emit(CALL_EVENTS.ACCEPTED, acceptPayload);
+      // Use fresh socket id (caller may have reconnected since initiate)
+      const callerSocketId =
+        (await SocketStore.getUserSocket(session.callerId)) || session.callerSocketId;
+
+      if (callerSocketId) {
+        io.to(callerSocketId).emit(CALL_EVENTS.ACCEPTED, acceptPayload);
       }
 
-      // Fallback 1: User ID Specific Room
-      io.to(String(session.callerId)).emit(CALL_EVENTS.ACCEPTED, acceptPayload);
-
-      // Fallback 2: Helper method (if exists)
-      if (typeof emitToUser === 'function') {
-        emitToUser(io, session.callerId, CALL_EVENTS.ACCEPTED, acceptPayload);
-      }
+      // Reliable delivery via personal room: user:<callerId>
+      emitToUser(io, session.callerId, CALL_EVENTS.ACCEPTED, acceptPayload);
 
       callSessionStore.updateStatus(callId, CALL_STATUS.CONNECTED);
       callback?.({ success: true, callId });

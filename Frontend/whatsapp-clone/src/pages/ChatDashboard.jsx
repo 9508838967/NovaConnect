@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MessageSquarePlus, Camera, MoreVertical, ArrowLeft, Smile, Paperclip, Send, Mic, Trash2 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext.jsx';
-import { useCall } from '../context/CallContext.jsx'; // 🔴 1. IMPORTED USECALL HOOK
 import API from '../services/api';
 import ChatList from '../components/ChatList';
-import IncomingCallModal from "../components/videoCall/IncomingCallModal";
 
 export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   const { getSocket } = useSocket();
-  const { acceptCall, rejectCall } = useCall(); // 🔴 2. DESTROYS & EXPOSES WEBRTC HANDSHAKE METHODS
 
   const [activeChats, setActiveChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
@@ -16,8 +13,7 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showMenuDropDown, setShowMenuDropDown] = useState(false);
 
-  // 1. INCOMING CALL STATE
-  const [incomingCall, setIncomingCall] = useState(null);
+  // Incoming call UI is handled by VideoCallPage via CallContext
 
   // INITIAL SYNC: Load chat list
   useEffect(() => {
@@ -46,16 +42,6 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     if (!socket) return;
 
     const myUserId = localStorage.getItem('userId');
-
-    // INCOMING CALL HANDLERS
-    const handleIncomingCall = (data) => {
-      console.log("☎️ Incoming call payload received:", data);
-      setIncomingCall(data);
-    };
-
-    const handleCallEndedOrMissed = () => {
-      setIncomingCall(null);
-    };
 
     const handlePrivateMessage = (incomingMsg) => {
       if (!incomingMsg) return;
@@ -126,65 +112,14 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     socket.on('typing:state_change', handleTypingChange);
     socket.on('message:deleted_everyone', handleMessageDeletedEveryone);
 
-    // CALL SOCKET LISTENERS
-    socket.on('call:incoming', handleIncomingCall);
-    socket.on('call:ended', handleCallEndedOrMissed);
-    socket.on('call:missed', handleCallEndedOrMissed);
-    socket.on('call:rejected', handleCallEndedOrMissed);
-
     return () => {
       socket.off('private:message', handlePrivateMessage);
       socket.off('group:message', handleGroupMessage);
       socket.off('presence:update', handlePresenceUpdate);
       socket.off('typing:state_change', handleTypingChange);
       socket.off('message:deleted_everyone', handleMessageDeletedEveryone);
-
-      socket.off('call:incoming', handleIncomingCall);
-      socket.off('call:ended', handleCallEndedOrMissed);
-      socket.off('call:missed', handleCallEndedOrMissed);
-      socket.off('call:rejected', handleCallEndedOrMissed);
     };
   }, [getSocket, selectedChat]);
-
-  // 🔴 FIXED RECEIVER ACCEPT HANDLER
-  const handleAcceptCall = async (e) => {
-    // 1. Prevent form submit or page reload if button is inside a form/link
-    if (e && typeof e.preventDefault === 'function') {
-      e.preventDefault();
-    }
-
-    if (!incomingCall) return;
-
-    try {
-      // 2. CallContext se acceptCall trigger hoga
-      await acceptCall(incomingCall);
-      
-      // 3. Connection start hone ke BAAD modal hide karein
-      setIncomingCall(null);
-    } catch (err) {
-      console.error("WebRTC SDP Answer generate karne me error aayi:", err);
-      setIncomingCall(null);
-    }
-  };
-
-  // 🔴 4. UPDATED RECEIVER REJECT HANDLER
-  const handleRejectCall = () => {
-    if (!incomingCall) return;
-
-    if (rejectCall) {
-      rejectCall(incomingCall.callId);
-    } else {
-      const socket = getSocket();
-      if (socket?.connected) {
-        socket.emit('call:reject', {
-          callId: incomingCall.callId,
-          reason: 'rejected'
-        });
-      }
-    }
-
-    setIncomingCall(null);
-  };
 
   const updateChatMessagesPipeline = (chatId, msgObject) => {
     if (!chatId) return;
@@ -344,16 +279,6 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-      
-      {/* INCOMING CALL OVERLAY MODAL */}
-      {incomingCall && (
-        <IncomingCallModal
-          caller={incomingCall.caller}
-          callType={incomingCall.callType}
-          onAccept={handleAcceptCall}
-          onReject={handleRejectCall}
-        />
-      )}
 
       {/* ACTIVE CHAT WORKSPACE OVERLAY SCREEN */}
       {selectedChat && (

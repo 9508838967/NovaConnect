@@ -46,6 +46,8 @@ export function useWebRTC(getSocket) {
   const callIdRef = useRef(null);
   const isCallerRef = useRef(false);
   const pendingCandidatesRef = useRef([]);
+  const pendingOutgoingIceRef = useRef([]);
+  const socketHandlersRef = useRef({});
 
   const [callStatus, setCallStatus] = useState(CALL_STATUS.IDLE);
   const [localStream, setLocalStream] = useState(null);
@@ -72,8 +74,22 @@ export function useWebRTC(getSocket) {
     closePeerConnection(pcRef.current);
     pcRef.current = null;
     pendingCandidatesRef.current = [];
+    pendingOutgoingIceRef.current = [];
     setConnectionState('closed');
   }, []);
+
+  const flushPendingOutgoingIce = useCallback(() => {
+    const socket = getSocket();
+    const callId = callIdRef.current;
+    if (!callId || !socket?.connected) return;
+
+    const pending = [...pendingOutgoingIceRef.current];
+    pendingOutgoingIceRef.current = [];
+
+    for (const candidate of pending) {
+      socket.emit(CALL_EVENTS.ICE_CANDIDATE, { callId, candidate });
+    }
+  }, [getSocket]);
 
   const resetCallState = useCallback(() => {
     callIdRef.current = null;
@@ -107,11 +123,15 @@ export function useWebRTC(getSocket) {
     };
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && callIdRef.current && socket?.connected) {
-        socket.emit(CALL_EVENTS.ICE_CANDIDATE, {
-          callId: callIdRef.current,
-          candidate: serializeIceCandidate(event.candidate),
-        });
+      if (!event.candidate) return;
+
+      const candidate = serializeIceCandidate(event.candidate);
+      const callId = callIdRef.current;
+
+      if (callId && socket?.connected) {
+        socket.emit(CALL_EVENTS.ICE_CANDIDATE, { callId, candidate });
+      } else {
+        pendingOutgoingIceRef.current.push(candidate);
       }
     };
 
@@ -236,6 +256,7 @@ export function useWebRTC(getSocket) {
         }
 
         callIdRef.current = response.callId;
+        flushPendingOutgoingIce();
         setCallStatus(CALL_STATUS.RINGING);
         return response.callId;
       } catch (err) {
@@ -245,7 +266,7 @@ export function useWebRTC(getSocket) {
         throw err;
       }
     },
-    [getSocket, acquireLocalMedia, setupPeerConnection, fullCleanup]
+    [getSocket, acquireLocalMedia, setupPeerConnection, fullCleanup, flushPendingOutgoingIce]
   );
 
  // ─── Accept incoming call (Fixed SDP Answer Negotiation & Payload Parameter) ───────────────
@@ -289,7 +310,8 @@ export function useWebRTC(getSocket) {
       console.log("✅ ACCEPT RESPONSE FROM SERVER:", response);
 
       setIncomingCall(null);
-      setCallStatus(CALL_STATUS.CONNECTED);
+      flushPendingOutgoingIce();
+      // Stay on CONNECTING until WebRTC peer connection is actually established
     } catch (err) {
       console.error("[acceptCall] Error:", err);
       fullCleanup();
@@ -303,6 +325,7 @@ export function useWebRTC(getSocket) {
     acquireLocalMedia,
     setupPeerConnection,
     flushPendingCandidates,
+    flushPendingOutgoingIce,
     fullCleanup,
   ]);
 
@@ -364,7 +387,7 @@ export function useWebRTC(getSocket) {
     });
   }, []);
 
-  // ─── Socket event listeners ───────────────────────────────────────────────
+  // ─── Socket event listeners (stable refs so events aren't missed on re-render) ─
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -382,41 +405,45 @@ export function useWebRTC(getSocket) {
 
     const handleRinging = ({ callId }) => {
       callIdRef.current = callId;
+      flushPendingOutgoingIce();
       setCallStatus(CALL_STATUS.RINGING);
     };
 
-   const handleAccepted = async (payload) => {
+    const handleAccepted = async (payload) => {
       console.log("✅ Call accepted on Caller side, Payload received:", payload);
       const { callId, answer } = payload || {};
-      
-      if (callId) callIdRef.current = callId;
-      const pc = pcRef.current;
 
+      if (callId) {
+        callIdRef.current = callId;
+        flushPendingOutgoingIce();
+      }
+
+      const pc = pcRef.current;
       if (!pc) {
         console.error("❌ Caller side PeerConnection (pcRef.current) missing or null!");
         return;
       }
 
-      if (answer) {
-        try {
-          // Check if answer is serialized string or JSON object
-          const sdpObject = typeof answer === 'string' ? JSON.parse(answer) : answer;
-
-          // Set Remote Description (Receiver's SDP Answer)
-          await pc.setRemoteDescription(new RTCSessionDescription(sdpObject));
-          await flushPendingCandidates();
-
-          console.log("🎉 Remote Description set on Caller side! Status: CONNECTED");
-          setCallStatus(CALL_STATUS.CONNECTED);
-          setCallError(null);
-        } catch (err) {
-          console.error('[useWebRTC] handleAccepted SDP Error:', err);
-          // Fallback: Agar SDP parse/set error aayi fir bhi UI ko CONNECTED set kar do status sync ke liye
-          setCallStatus(CALL_STATUS.CONNECTED);
-        }
-      } else {
+      if (!answer) {
         console.warn("⚠️ Answer missing in ACCEPTED payload");
-        setCallStatus(CALL_STATUS.CONNECTED);
+        setCallStatus(CALL_STATUS.CONNECTING);
+        return;
+      }
+
+      try {
+        const sdpObject =
+          typeof answer === 'string' ? JSON.parse(answer) : answer;
+
+        await pc.setRemoteDescription(new RTCSessionDescription(sdpObject));
+        await flushPendingCandidates();
+
+        console.log("🎉 Remote Description set on Caller side");
+        setCallStatus(CALL_STATUS.CONNECTING);
+        setCallError(null);
+      } catch (err) {
+        console.error('[useWebRTC] handleAccepted SDP Error:', err);
+        setCallStatus(CALL_STATUS.FAILED);
+        setCallError('Failed to connect call');
       }
     };
 
@@ -469,30 +496,44 @@ export function useWebRTC(getSocket) {
       setTimeout(() => setCallStatus(CALL_STATUS.IDLE), 300);
     };
 
-    socket.on(CALL_EVENTS.INCOMING, handleIncoming);
-    socket.on(CALL_EVENTS.RINGING, handleRinging);
-    socket.on(CALL_EVENTS.ACCEPTED, handleAccepted);
-    socket.on(CALL_EVENTS.REJECTED, handleRejected);
-    socket.on(CALL_EVENTS.ENDED, handleEnded);
-    socket.on(CALL_EVENTS.MISSED, handleMissed);
-    socket.on(CALL_EVENTS.ICE_CANDIDATE, handleIceCandidate);
-    socket.on(CALL_EVENTS.OFFER, handleOffer);
-    socket.on(CALL_EVENTS.ANSWER, handleAnswer);
-    socket.on(CALL_EVENTS.USER_DISCONNECTED, handleUserDisconnected);
+    socketHandlersRef.current = {
+      handleIncoming,
+      handleRinging,
+      handleAccepted,
+      handleRejected,
+      handleEnded,
+      handleMissed,
+      handleIceCandidate,
+      handleOffer,
+      handleAnswer,
+      handleUserDisconnected,
+    };
+
+    const bind = (event, key) => {
+      const listener = (...args) => socketHandlersRef.current[key]?.(...args);
+      socket.on(event, listener);
+      return listener;
+    };
+
+    const listeners = [
+      [CALL_EVENTS.INCOMING, bind(CALL_EVENTS.INCOMING, 'handleIncoming')],
+      [CALL_EVENTS.RINGING, bind(CALL_EVENTS.RINGING, 'handleRinging')],
+      [CALL_EVENTS.ACCEPTED, bind(CALL_EVENTS.ACCEPTED, 'handleAccepted')],
+      [CALL_EVENTS.REJECTED, bind(CALL_EVENTS.REJECTED, 'handleRejected')],
+      [CALL_EVENTS.ENDED, bind(CALL_EVENTS.ENDED, 'handleEnded')],
+      [CALL_EVENTS.MISSED, bind(CALL_EVENTS.MISSED, 'handleMissed')],
+      [CALL_EVENTS.ICE_CANDIDATE, bind(CALL_EVENTS.ICE_CANDIDATE, 'handleIceCandidate')],
+      [CALL_EVENTS.OFFER, bind(CALL_EVENTS.OFFER, 'handleOffer')],
+      [CALL_EVENTS.ANSWER, bind(CALL_EVENTS.ANSWER, 'handleAnswer')],
+      [CALL_EVENTS.USER_DISCONNECTED, bind(CALL_EVENTS.USER_DISCONNECTED, 'handleUserDisconnected')],
+    ];
 
     return () => {
-      socket.off(CALL_EVENTS.INCOMING, handleIncoming);
-      socket.off(CALL_EVENTS.RINGING, handleRinging);
-      socket.off(CALL_EVENTS.ACCEPTED, handleAccepted);
-      socket.off(CALL_EVENTS.REJECTED, handleRejected);
-      socket.off(CALL_EVENTS.ENDED, handleEnded);
-      socket.off(CALL_EVENTS.MISSED, handleMissed);
-      socket.off(CALL_EVENTS.ICE_CANDIDATE, handleIceCandidate);
-      socket.off(CALL_EVENTS.OFFER, handleOffer);
-      socket.off(CALL_EVENTS.ANSWER, handleAnswer);
-      socket.off(CALL_EVENTS.USER_DISCONNECTED, handleUserDisconnected);
+      for (const [event, listener] of listeners) {
+        socket.off(event, listener);
+      }
     };
-  }, [getSocket, fullCleanup, addRemoteIceCandidate, flushPendingCandidates]);
+  }, [getSocket, fullCleanup, addRemoteIceCandidate, flushPendingCandidates, flushPendingOutgoingIce]);
 
   // Cleanup on unmount
   useEffect(() => () => fullCleanup(), [fullCleanup]);
