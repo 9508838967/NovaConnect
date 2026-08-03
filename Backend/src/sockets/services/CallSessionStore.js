@@ -96,7 +96,7 @@ class CallSessionStore {
     const session = {
       callId,
       callerId: caller,
-      callerSocketId: socket.id,
+      callerSocketId: callerSocketId,
       calleeId: callee,
       callType,
       status: CALL_STATUS.RINGING,
