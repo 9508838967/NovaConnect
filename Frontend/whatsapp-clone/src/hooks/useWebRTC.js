@@ -36,10 +36,7 @@ import {
  * @property {RTCSessionDescriptionInit|null} offer
  */
 
-/**
- * @param {() => import('socket.io-client').Socket|null} getSocket
- */
-export function useWebRTC(getSocket) {
+export function useWebRTC(socket) { // ✅ Parameter updated
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
@@ -79,9 +76,8 @@ export function useWebRTC(getSocket) {
   }, []);
 
   const flushPendingOutgoingIce = useCallback(() => {
-    const socket = getSocket();
     const callId = callIdRef.current;
-    if (!callId || !socket?.connected) return;
+    if (!callId || !socket?.connected) return; // ✅ Direct socket usage
 
     const pending = [...pendingOutgoingIceRef.current];
     pendingOutgoingIceRef.current = [];
@@ -89,7 +85,7 @@ export function useWebRTC(getSocket) {
     for (const candidate of pending) {
       socket.emit(CALL_EVENTS.ICE_CANDIDATE, { callId, candidate });
     }
-  }, [getSocket]);
+  }, [socket]); // ✅ Updated dependency
 
   const resetCallState = useCallback(() => {
     callIdRef.current = null;
@@ -110,7 +106,6 @@ export function useWebRTC(getSocket) {
 
   // ─── Peer connection factory ──────────────────────────────────────────────
   const setupPeerConnection = useCallback(() => {
-    const socket = getSocket();
     const pc = createPeerConnection();
 
     pc.ontrack = (event) => {
@@ -128,7 +123,7 @@ export function useWebRTC(getSocket) {
       const candidate = serializeIceCandidate(event.candidate);
       const callId = callIdRef.current;
 
-      if (callId && socket?.connected) {
+      if (callId && socket?.connected) { // ✅ Direct socket usage
         socket.emit(CALL_EVENTS.ICE_CANDIDATE, { callId, candidate });
       } else {
         pendingOutgoingIceRef.current.push(candidate);
@@ -141,7 +136,7 @@ export function useWebRTC(getSocket) {
 
       if (pc.connectionState === 'connected') {
         setCallStatus(CALL_STATUS.CONNECTED);
-        setCallError(null); // Clear "User is busy" / "Failed" error banner
+        setCallError(null); 
       }
       if (pc.connectionState === 'failed') {
         console.error("❌ WebRTC Connection Failed");
@@ -162,7 +157,7 @@ export function useWebRTC(getSocket) {
 
     pcRef.current = pc;
     return pc;
-  }, [getSocket]);
+  }, [socket]); // ✅ Updated dependency
 
   const flushPendingCandidates = useCallback(async () => {
     const pc = pcRef.current;
@@ -224,7 +219,7 @@ export function useWebRTC(getSocket) {
   // ─── Initiate outgoing call ───────────────────────────────────────────────
   const initiateCall = useCallback(
     async ({ calleeId, calleeName, callType = 'video' }) => {
-      const socket = getSocket();
+      // ✅ Removed `const socket = socket();` completely
       if (!socket?.connected) {
         throw new Error('Not connected to server');
       }
@@ -266,13 +261,12 @@ export function useWebRTC(getSocket) {
         throw err;
       }
     },
-    [getSocket, acquireLocalMedia, setupPeerConnection, fullCleanup, flushPendingOutgoingIce]
+    [socket, acquireLocalMedia, setupPeerConnection, fullCleanup, flushPendingOutgoingIce] // ✅ Updated dependency
   );
 
  // ─── Accept incoming call (Fixed SDP Answer Negotiation & Payload Parameter) ───────────────
   const acceptCall = useCallback(async (payloadParam) => {
-    const socket = getSocket();
-    // Prefer passed payloadParam, fallback to state variable
+    // ✅ Removed `const socket = getSocket();` completely
     const incoming = payloadParam || incomingCall;
 
     console.log("🚀 ACCEPT CALL TRIGGERED WITH PAYLOAD:", incoming);
@@ -311,7 +305,6 @@ export function useWebRTC(getSocket) {
 
       setIncomingCall(null);
       flushPendingOutgoingIce();
-      // Stay on CONNECTING until WebRTC peer connection is actually established
     } catch (err) {
       console.error("[acceptCall] Error:", err);
       fullCleanup();
@@ -320,7 +313,7 @@ export function useWebRTC(getSocket) {
       throw err;
     }
   }, [
-    getSocket,
+    socket, // ✅ Updated dependency
     incomingCall,
     acquireLocalMedia,
     setupPeerConnection,
@@ -331,7 +324,7 @@ export function useWebRTC(getSocket) {
 
   // ─── Reject incoming call ─────────────────────────────────────────────────
   const rejectCall = useCallback(async () => {
-    const socket = getSocket();
+    // ✅ Removed `const socket = getSocket();` completely
     if (!incomingCall || !socket?.connected) {
       resetCallState();
       return;
@@ -347,11 +340,11 @@ export function useWebRTC(getSocket) {
     } finally {
       fullCleanup();
     }
-  }, [getSocket, incomingCall, fullCleanup, resetCallState]);
+  }, [socket, incomingCall, fullCleanup, resetCallState]); // ✅ Updated dependency
 
   // ─── End active call ──────────────────────────────────────────────────────
   const endCall = useCallback(async () => {
-    const socket = getSocket();
+    // ✅ Removed `const socket = getSocket();` completely
     const callId = callIdRef.current;
 
     if (callId && socket?.connected) {
@@ -368,7 +361,7 @@ export function useWebRTC(getSocket) {
     setTimeout(() => {
       setCallStatus(CALL_STATUS.IDLE);
     }, 300);
-  }, [getSocket, fullCleanup]);
+  }, [socket, fullCleanup]); // ✅ Updated dependency
 
   // ─── Media controls ───────────────────────────────────────────────────────
   const toggleMute = useCallback(() => {
@@ -389,8 +382,8 @@ export function useWebRTC(getSocket) {
 
   // ─── Socket event listeners (stable refs so events aren't missed on re-render) ─
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
+    // ✅ Removed `const socket = getSocket();` completely
+    if (!socket) return; 
 
     const handleIncoming = (payload) => {
       console.log("☎️ Incoming call payload:", payload);
@@ -533,7 +526,7 @@ export function useWebRTC(getSocket) {
         socket.off(event, listener);
       }
     };
-  }, [getSocket, fullCleanup, addRemoteIceCandidate, flushPendingCandidates, flushPendingOutgoingIce]);
+  }, [socket, fullCleanup, addRemoteIceCandidate, flushPendingCandidates, flushPendingOutgoingIce]); // ✅ Updated dependency
 
   // Cleanup on unmount
   useEffect(() => () => fullCleanup(), [fullCleanup]);

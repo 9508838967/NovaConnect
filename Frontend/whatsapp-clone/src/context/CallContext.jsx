@@ -10,8 +10,8 @@ import { useWebRTC } from '../hooks/useWebRTC.js';
 const CallContext = createContext(null);
 
 export function CallProvider({ children }) {
-  const { getSocket } = useSocket();
-  const webrtc = useWebRTC(getSocket);
+  const { socket } = useSocket();
+  const webrtc = useWebRTC(socket);
 
   const value = useMemo(() => webrtc, [webrtc]);
 
