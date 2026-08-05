@@ -155,12 +155,12 @@ module.exports = (io, socket, user) => {
       };
 
       // Use fresh socket id (caller may have reconnected since initiate)
-      const callerSocketId =
-        (await SocketStore.getUserSocket(session.callerId)) || session.callerSocketId;
+      // const callerSocketId =
+      //   (await SocketStore.getUserSocket(session.callerId)) || session.callerSocketId;
 
-      if (callerSocketId) {
-        io.to(callerSocketId).emit(CALL_EVENTS.ACCEPTED, acceptPayload);
-      }
+      // if (callerSocketId) {
+      //   io.to(callerSocketId).emit(CALL_EVENTS.ACCEPTED, acceptPayload);
+      // }
 
       // Reliable delivery via personal room: user:<callerId>
       emitToUser(io, session.callerId, CALL_EVENTS.ACCEPTED, acceptPayload);
