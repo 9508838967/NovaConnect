@@ -178,9 +178,11 @@ export function useWebRTC(socket) { // ✅ Parameter updated
   const addRemoteIceCandidate = useCallback(async (candidate) => {
     if (!candidate) return;
     const pc = pcRef.current;
-    if (!pc) return;
 
-    if (!pc.remoteDescription) {
+    // 🔴 FIX: Agar PeerConnection abhi nahi bana hai (phone ring ho raha hai), 
+    // YA remoteDescription set nahi hui hai, toh candidates ko queue mein daal do!
+    if (!pc || !pc.remoteDescription) {
+      console.log("⏳ Queueing ICE Candidate (waiting for connection/SDP)");
       pendingCandidatesRef.current.push(candidate);
       return;
     }
