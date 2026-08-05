@@ -264,10 +264,12 @@ export function useWebRTC(socket) { // ✅ Parameter updated
     [socket, acquireLocalMedia, setupPeerConnection, fullCleanup, flushPendingOutgoingIce] // ✅ Updated dependency
   );
 
- // ─── Accept incoming call (Fixed SDP Answer Negotiation & Payload Parameter) ───────────────
+// ─── Accept incoming call ───────────────
   const acceptCall = useCallback(async (payloadParam) => {
-    // ✅ Removed `const socket = getSocket();` completely
-    const incoming = payloadParam || incomingCall;
+    
+    // 🔴 FIX: Agar payloadParam ek Mouse Event hai (jisme callId nahi hai), 
+    // toh usko ignore karein aur state wala 'incomingCall' use karein.
+    const incoming = (payloadParam && payloadParam.callId) ? payloadParam : incomingCall;
 
     console.log("🚀 ACCEPT CALL TRIGGERED WITH PAYLOAD:", incoming);
 
@@ -288,12 +290,13 @@ export function useWebRTC(socket) { // ✅ Parameter updated
       attachLocalStream(pc, stream);
 
       if (incoming.offer) {
-  const offerObj = typeof incoming.offer === 'string' ? JSON.parse(incoming.offer) : incoming.offer;
-  await pc.setRemoteDescription(new RTCSessionDescription(offerObj));
-  await flushPendingCandidates();
-} else {
-  throw new Error("Offer data missing! Cannot connect call.");
-}
+        // 🔴 FIX: Offer ko handle karein chahe wo string ho ya object
+        const offerObj = typeof incoming.offer === 'string' ? JSON.parse(incoming.offer) : incoming.offer;
+        await pc.setRemoteDescription(new RTCSessionDescription(offerObj));
+        await flushPendingCandidates();
+      } else {
+        throw new Error("Offer data missing! Cannot connect call.");
+      }
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -301,7 +304,9 @@ export function useWebRTC(socket) { // ✅ Parameter updated
       // Emit Accept Event to Backend
       const response = await emitWithAck(socket, CALL_EVENTS.ACCEPT, {
         callId: incoming.callId,
-        answer: serializeDescription(answer),
+        
+        // 🔴 Ensure karein ki answer properly pass ho raha hai
+        answer: { type: answer.type, sdp: answer.sdp }, 
       });
 
       console.log("✅ ACCEPT RESPONSE FROM SERVER:", response);
@@ -313,10 +318,9 @@ export function useWebRTC(socket) { // ✅ Parameter updated
       fullCleanup();
       setCallStatus(CALL_STATUS.FAILED);
       setCallError(err.message || 'Failed to accept call');
-      throw err;
     }
   }, [
-    socket, // ✅ Updated dependency
+    socket,
     incomingCall,
     acquireLocalMedia,
     setupPeerConnection,
