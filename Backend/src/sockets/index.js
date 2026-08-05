@@ -35,7 +35,7 @@ const initSocket = async (server) => {
     await presenceHandler.handleConnect(socket, user);
 
     // Join user's personal room
-    socket.join(`user:${user._id}`);
+    socket.join(`user:${user._id.toString()}`);
 
     // Rejoin all groups the user belongs to (retrieved from DB or Redis store)
     const userGroups = await getUserGroupsFromDB(user._id); // implement DB query

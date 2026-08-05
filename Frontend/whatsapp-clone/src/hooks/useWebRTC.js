@@ -243,7 +243,7 @@ export function useWebRTC(socket) { // ✅ Parameter updated
         const response = await emitWithAck(socket, CALL_EVENTS.INITIATE, {
           calleeId,
           callType,
-          offer: serializeDescription(offer),
+          offer: offer,
         });
 
         if (response?.error) {
@@ -288,9 +288,12 @@ export function useWebRTC(socket) { // ✅ Parameter updated
       attachLocalStream(pc, stream);
 
       if (incoming.offer) {
-        await pc.setRemoteDescription(new RTCSessionDescription(incoming.offer));
-        await flushPendingCandidates();
-      }
+  const offerObj = typeof incoming.offer === 'string' ? JSON.parse(incoming.offer) : incoming.offer;
+  await pc.setRemoteDescription(new RTCSessionDescription(offerObj));
+  await flushPendingCandidates();
+} else {
+  throw new Error("Offer data missing! Cannot connect call.");
+}
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
