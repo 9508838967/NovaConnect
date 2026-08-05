@@ -253,24 +253,69 @@ export default function ChatDashboard({ onTriggerCall, onOpenSettings }) {
     }
   };
 
-  const handleCreateChat = async () => {
-    const inputId = window.prompt("Enter Target User's Valid MongoDB ID (24-digit hex) from MongoDB Compass:");
-    if (!inputId || !inputId.trim()) return;
+ const handleCreateChat = async () => {
+    // 1. Pehle user se poochein ki kya wo group banana chahta hai?
+    const isGroupChoice = window.confirm("Kya aap naya Group banana chahte hain? (Private chat ke liye 'Cancel' dabayein)");
 
-    const isGroupChoice = window.confirm("Is this a Group Chat channel?");
-    const secureId = inputId.trim().length === 24 ? inputId.trim() : "65f1a2b3c4d5e6f7a8b9c0d1"; 
+    if (isGroupChoice) {
+      // 🟢 GROUP CHAT LOGIC
+      const groupName = window.prompt("Group ka naam batayein:");
+      if (!groupName || !groupName.trim()) return;
 
-    const newChat = {
-      id: secureId,
-      name: inputId.trim().includes('@') ? inputId.trim().split('@')[0] : "Test User",
-      isGroup: isGroupChoice,
-      unreadCount: 0,
-      isOnline: true,
-      isTyping: false,
-      messages: []
-    };
-    setActiveChats(prev => [newChat, ...prev]);
-    setSelectedChat(newChat);
+      // Group banne ke baad backend se ID aani chahiye, abhi ke liye local ID de rahe hain
+      const newGroupChat = {
+        id: `group-${Date.now()}`, // Future mein ise API response se replace kijiye
+        name: groupName.trim(),
+        isGroup: true,
+        unreadCount: 0,
+        isOnline: true,
+        isTyping: false,
+        messages: []
+      };
+      
+      setActiveChats(prev => [newGroupChat, ...prev]);
+      setSelectedChat(newGroupChat);
+
+    } else {
+      // 🔵 1-ON-1 CHAT LOGIC (Email Search)
+      const targetEmail = window.prompt("Enter Target User's Email ID:");
+      if (!targetEmail || !targetEmail.trim()) return;
+
+      try {
+        const response = await API.get(`/auth/search?email=${targetEmail.trim()}`);
+
+        const targetUser = response.data.user;
+        const targetId = targetUser._id;
+        const targetName = targetUser.username || targetEmail.split('@')[0];
+
+        const existingChat = activeChats.find(c => c.id === targetId);
+        if (existingChat) {
+          setSelectedChat(existingChat);
+          return;
+        }
+
+        const newChat = {
+          id: targetId,
+          name: targetName,
+          isGroup: false, 
+          unreadCount: 0,
+          isOnline: false,
+          isTyping: false,
+          messages: []
+        };
+        
+        setActiveChats(prev => [newChat, ...prev]);
+        setSelectedChat(newChat);
+
+      } catch (error) {
+        if (error.response && error.response.status === 404) {
+          alert("User doesn't exist!");
+        } else {
+          alert("KNetwork Error.");
+        }
+        console.error("User Search Error:", error);
+      }
+    }
   };
 
   const filteredChats = (activeChats || []).filter(chat =>
